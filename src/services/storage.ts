@@ -210,7 +210,7 @@ class LocalReportStorage {
 
     const filtered = allRecords
       .filter((r) => getMonthKeyFromDateKey(r.dateKey) === monthKey)
-      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 
     const records: MonthRecordSummary[] = filtered.map((r) => {
       const [year, month, day] = r.dateKey.split('-');

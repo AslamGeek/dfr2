@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Settings, Loader2 } from 'lucide-react';
+import { Settings, Loader2, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DateSelector } from './components/DateSelector';
 import { WorkPlaceSelector } from './components/WorkPlaceSelector';
@@ -187,11 +187,16 @@ function AppContent({
   // Dark mode theme hook
   const { isDark, toggleTheme } = useTheme();
 
-  // Scroll direction detection for auto-hiding top header and bottom tabs
-  const { isVisible: isBarsVisible, showBars } = useScrollDirection({
+  // Scroll direction detection for auto-hiding top header on scroll down
+  const { isVisible: isHeaderVisible, showBars } = useScrollDirection({
     threshold: 8,
     initialVisible: true,
   });
+
+  // Check if active record date is in the past (before today's local date)
+  const isPastRecord = autoDate.todayDateKey
+    ? daily.record.dateKey < autoDate.todayDateKey
+    : false;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-28 font-sans selection:bg-slate-200 dark:selection:bg-slate-800 transition-colors duration-200">
@@ -199,7 +204,7 @@ function AppContent({
       <header
         id="top-header-bar"
         className={`sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-b border-slate-200 dark:border-slate-800 shadow-2xs transition-transform duration-300 ease-in-out ${
-          isBarsVisible ? 'translate-y-0' : '-translate-y-full'
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
@@ -266,10 +271,17 @@ function AppContent({
                 disabled={daily.isLoadingDate}
               />
 
+              {isPastRecord && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-xs font-medium">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Past daily record ({daily.record.dateKey}) is read-only and cannot be edited.</span>
+                </div>
+              )}
+
               <WorkPlaceSelector
                 value={daily.record.workPlace}
                 onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
-                disabled={daily.isLoadingDate}
+                disabled={daily.isLoadingDate || isPastRecord}
               />
 
               <MorningReport
@@ -299,10 +311,17 @@ function AppContent({
                 disabled={daily.isLoadingDate}
               />
 
+              {isPastRecord && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-xs font-medium">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Past daily record ({daily.record.dateKey}) is read-only and cannot be edited.</span>
+                </div>
+              )}
+
               <WorkPlaceSelector
                 value={daily.record.workPlace}
                 onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
-                disabled={daily.isLoadingDate}
+                disabled={daily.isLoadingDate || isPastRecord}
               />
 
               <EveningReport
@@ -314,7 +333,7 @@ function AppContent({
                 onChangeNewConversions={daily.setNewConversions}
                 onChangePob={daily.setPob}
                 onEnsureSavedAndGetCalculated={handleEnsureSavedAndGetCalculated}
-                disabled={daily.isLoadingDate}
+                disabled={daily.isLoadingDate || isPastRecord}
               />
             </motion.div>
           )}
@@ -335,12 +354,8 @@ function AppContent({
                 totalDoctors={monthlyOverview.totalDoctors}
                 totalChemists={monthlyOverview.totalChemists}
                 selectedDateKey={daily.record.dateKey}
+                settings={settingsManager.settings}
                 onSelectDate={(dateKey) => daily.switchDate(dateKey)}
-                onOpenReport={(dateKey) => {
-                  daily.switchDate(dateKey);
-                  setActiveTab('evening');
-                  showBars();
-                }}
                 onPrevMonth={monthlyOverview.prevMonth}
                 onNextMonth={monthlyOverview.nextMonth}
                 isLoading={monthlyOverview.isLoading}
@@ -355,9 +370,7 @@ function AppContent({
       <nav
         id="bottom-nav-bar"
         aria-label="Screen Navigation"
-        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800/90 shadow-lg transition-transform duration-300 ease-in-out ${
-          isBarsVisible ? 'translate-y-0' : 'translate-y-full'
-        }`}
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800/90 shadow-lg"
       >
         <div className="max-w-md mx-auto px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <ReportTabs

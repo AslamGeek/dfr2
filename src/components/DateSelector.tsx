@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatDisplayDate, getReportingWeek, offsetDateKey } from '../lib/dates';
+import { formatDisplayDate, getDayName, getReportingWeek, offsetDateKey } from '../lib/dates';
 
 interface DateSelectorProps {
   dateKey: string;
@@ -19,6 +19,7 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   disabled = false,
 }) => {
   const displayDate = formatDisplayDate(dateKey);
+  const dayName = getDayName(dateKey);
   const weekInfo = getReportingWeek(dateKey);
   const isToday = todayDateKey ? dateKey === todayDateKey : false;
 
@@ -83,10 +84,13 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
-              className="inline-flex items-center justify-center gap-1.5 font-bold text-lg text-slate-900 dark:text-slate-100"
+              className="inline-flex items-center justify-center gap-1.5 font-bold text-base sm:text-lg text-slate-900 dark:text-slate-100"
             >
-              <CalendarIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              <span>{displayDate}</span>
+              <CalendarIcon className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+              <span id="reporting-date-day" className="font-semibold text-slate-700 dark:text-slate-300">
+                {dayName},
+              </span>
+              <span id="reporting-date-value">{displayDate}</span>
             </motion.div>
           </AnimatePresence>
 

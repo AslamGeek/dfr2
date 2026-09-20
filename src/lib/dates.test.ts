@@ -9,6 +9,7 @@ import {
   parseDisplayDate,
   isKolkataToday,
   getMsUntilNextMidnight,
+  getDayName,
 } from './dates';
 
 describe('Date Utilities & Reporting Weeks', () => {
@@ -69,5 +70,12 @@ describe('Date Utilities & Reporting Weeks', () => {
     // Difference between 18:30:00Z and 14:00:00Z is 4.5 hours = 4.5 * 3600 * 1000 = 16,200,000 ms
     const ms = getMsUntilNextMidnight(ref);
     expect(ms).toBe(16200000);
+  });
+
+  it('correctly resolves day of week name', () => {
+    expect(getDayName('2026-09-20')).toBe('Sunday');
+    expect(getDayName('2026-09-21')).toBe('Monday');
+    expect(getDayName('2026-09-22')).toBe('Tuesday');
+    expect(getDayName('2026-09-20', 'short')).toBe('Sun');
   });
 });

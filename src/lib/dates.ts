@@ -136,3 +136,18 @@ export function formatMonthLabel(monthKey: string): string {
     timeZone: 'UTC',
   });
 }
+
+/**
+ * Returns day name of the week (e.g. "Sunday", "Monday") for a given dateKey (YYYY-MM-DD).
+ */
+export function getDayName(dateKey: string, format: 'long' | 'short' = 'long'): string {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return '';
+  }
+  const [year, month, day] = dateKey.split('-').map((v) => parseInt(v, 10));
+  const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return d.toLocaleDateString('en-US', {
+    weekday: format,
+    timeZone: 'UTC',
+  });
+}
