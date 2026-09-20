@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, X, Check, Loader2, BookOpen } from 'lucide-react';
+import { Settings as SettingsIcon, X, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OpeningBalancesPanel } from './OpeningBalancesPanel';
 import { normalizeNonNegativeInt } from '../lib/validation';
@@ -13,8 +13,6 @@ interface SettingsPanelProps {
   currentMonthKey: string;
   onLoadOpening: (monthKey: string) => Promise<MonthlyOpeningBalance>;
   onSaveOpening: (balance: MonthlyOpeningBalance) => Promise<MonthlyOpeningBalance>;
-  onOpenDeploymentGuide: () => void;
-  isBackendGas: boolean;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -25,8 +23,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   currentMonthKey,
   onLoadOpening,
   onSaveOpening,
-  onOpenDeploymentGuide,
-  isBackendGas,
 }) => {
   const [name, setName] = useState<string>(settings.name);
   const [hq, setHq] = useState<string>(settings.hq);
@@ -220,26 +216,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               onLoadOpening={onLoadOpening}
               onSaveOpening={onSaveOpening}
             />
-          </div>
-
-          {/* Apps Script & Deployment Guide Button */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl">
-            <div>
-              <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                Deployment & Sheets Setup
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                {isBackendGas ? 'Connected to Google Apps Script' : 'Running in Dev Simulation'}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={onOpenDeploymentGuide}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs transition-colors cursor-pointer"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Guide</span>
-            </button>
           </div>
         </div>
 

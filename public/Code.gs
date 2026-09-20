@@ -1,0 +1,867 @@
+/**
+ * Google Apps Script Web App Entry Point & Public API.
+ * Daily Field-Work Report Application
+ * Representative: Aslam K. S. (HQ: Proddatur)
+ */
+
+/**
+ * Web App HTTP GET handler.
+ * Serves the compiled React frontend through HtmlService.
+ */
+function doGet(e) {
+  var htmlOutput = HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Daily Field-Work Report - Aslam K. S.')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+
+  return htmlOutput;
+}
+
+/**
+ * Aggregated initial request for fast mobile boot.
+ * Returns settings, today's record, calculated cumulative values, and current monthly overview in ONE round trip.
+ */
+function getInitialAppData() {
+  try {
+    var today = getKolkataToday_();
+    var settings = getSettings();
+    var todayRecord = getRecord(today);
+    var calculatedData = getCalculatedReportData(today);
+    var currentMonthKey = getMonthKeyFromDateKey_(today);
+    var monthlyOverview = getMonthlyRecords(currentMonthKey);
+
+    return {
+      serverToday: today,
+      settings: settings,
+      todayRecord: todayRecord,
+      calculatedData: calculatedData,
+      monthlyOverview: monthlyOverview,
+      isBackendGas: true
+    };
+  } catch (err) {
+    Logger.log('Error in getInitialAppData: ' + err);
+    throw new Error('Failed to load initial application data: ' + err.message);
+  }
+}
+/**
+ * Google Spreadsheet connection and initialization helpers.
+ */
+
+var SHEET_NAMES = {
+  RECORDS: 'Records',
+  SETTINGS: 'Settings',
+  OPENING_BALANCES: 'MonthlyOpeningBalances'
+};
+
+var RECORDS_HEADERS = [
+  'DateKey',
+  'ReportDate',
+  'WorkPlace',
+  'Doctors',
+  'Chemists',
+  'NewConversions',
+  'POB',
+  'CreatedAt',
+  'UpdatedAt'
+];
+
+var SETTINGS_HEADERS = ['Key', 'Value'];
+
+var OPENING_BALANCES_HEADERS = [
+  'MonthKey',
+  'DoctorsOpening',
+  'ChemistsOpening',
+  'PobOpening',
+  'UpdatedAt'
+];
+
+/**
+ * Retrieves the bound or configured Google Spreadsheet.
+ */
+function getSpreadsheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var configuredId = props.getProperty('SPREADSHEET_ID');
+
+  if (configuredId) {
+    try {
+      return SpreadsheetApp.openById(configuredId);
+    } catch (e) {
+      Logger.log('Could not open spreadsheet by ID: ' + configuredId + '. Error: ' + e);
+    }
+  }
+
+  // Fallback to active spreadsheet if container-bound
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) {
+      return active;
+    }
+  } catch (e) {
+    Logger.log('No active spreadsheet container: ' + e);
+  }
+
+  throw new Error(
+    'Spreadsheet not configured. Please set SPREADSHEET_ID in Apps Script Script Properties, or run from a bound spreadsheet.'
+  );
+}
+
+/**
+ * Gets a sheet by name.
+ */
+function getSheet_(sheetName) {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error('Required sheet "' + sheetName + '" does not exist. Run initializeApp() first.');
+  }
+  return sheet;
+}
+
+/**
+ * Ensures a sheet exists with the given header row.
+ * Idempotent: does not overwrite data or create duplicate headers.
+ */
+function ensureSheet_(sheetName, headers) {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+
+  if (lastRow === 0 || lastCol === 0) {
+    // Empty sheet: insert headers
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  } else {
+    // Check if headers match
+    var existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var needsHeaders = false;
+    if (existingHeaders.length < headers.length) {
+      needsHeaders = true;
+    } else {
+      for (var i = 0; i < headers.length; i++) {
+        if (String(existingHeaders[i]).trim() !== headers[i]) {
+          needsHeaders = true;
+          break;
+        }
+      }
+    }
+    if (needsHeaders && lastRow === 1) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.setFrozenRows(1);
+    }
+  }
+
+  return sheet;
+}
+
+/**
+ * Executes a callback inside a concurrency lock.
+ */
+function withLock_(fn, timeoutMs) {
+  var timeout = timeoutMs || 10000;
+  var lock = LockService.getScriptLock();
+  var acquired = false;
+
+  try {
+    acquired = lock.tryLock(timeout);
+    if (!acquired) {
+      throw new Error('Database is busy (lock timeout). Please retry in a moment.');
+    }
+    return fn();
+  } finally {
+    if (acquired) {
+      try {
+        lock.releaseLock();
+      } catch (e) {
+        Logger.log('Error releasing lock: ' + e);
+      }
+    }
+  }
+}
+
+/**
+ * One-time idempotent initialization of the Google Sheet structure.
+ */
+function initializeApp() {
+  return withLock_(function() {
+    Logger.log('Starting initializeApp...');
+
+    // 1. Ensure Records Sheet
+    ensureSheet_(SHEET_NAMES.RECORDS, RECORDS_HEADERS);
+
+    // 2. Ensure Settings Sheet
+    var settingsSheet = ensureSheet_(SHEET_NAMES.SETTINGS, SETTINGS_HEADERS);
+
+    // Populate default settings if missing
+    var currentSettings = getSettings();
+    if (!currentSettings || !currentSettings.name) {
+      saveSettings({
+        name: 'Aslam K. S.',
+        hq: 'Proddatur',
+        timeZone: TIMEZONE_KOLKATA,
+        pobMode: 'monthly',
+        continuousPobOpeningBalance: 0,
+        schemaVersion: '1.1.0'
+      });
+    }
+
+    // 3. Ensure MonthlyOpeningBalances Sheet
+    ensureSheet_(SHEET_NAMES.OPENING_BALANCES, OPENING_BALANCES_HEADERS);
+
+    Logger.log('initializeApp completed successfully.');
+    return { success: true, message: 'Initialization completed successfully.' };
+  }, 15000);
+}
+/**
+ * Records CRUD operations in Google Sheets.
+ */
+
+/**
+ * Fetches all daily records from the Records sheet efficiently using batch read.
+ */
+function getAllRecords_() {
+  try {
+    var sheet = getSheet_(SHEET_NAMES.RECORDS);
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+
+    if (lastRow <= 1) {
+      return [];
+    }
+
+    var values = sheet.getRange(2, 1, lastRow - 1, Math.max(lastCol, 9)).getValues();
+    var records = [];
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var rawDate = row[0];
+      var dateKey = '';
+
+      if (rawDate instanceof Date) {
+        dateKey = Utilities.formatDate(rawDate, TIMEZONE_KOLKATA, 'yyyy-MM-dd');
+      } else if (typeof rawDate === 'string') {
+        dateKey = rawDate.trim();
+      }
+
+      // Skip malformed rows safely
+      if (!isValidDateKey_(dateKey)) {
+        continue;
+      }
+
+      var workPlace = String(row[2] || '').trim();
+      if (!isValidWorkPlace_(workPlace)) {
+        workPlace = 'Proddatur';
+      }
+
+      records.push({
+        dateKey: dateKey,
+        workPlace: workPlace,
+        doctors: normalizeNonNegativeInt_(row[3]),
+        chemists: normalizeNonNegativeInt_(row[4]),
+        newConversions: normalizeNonNegativeInt_(row[5]),
+        pob: normalizeNonNegativeInt_(row[6]),
+        createdAt: String(row[7] || ''),
+        updatedAt: String(row[8] || '')
+      });
+    }
+
+    return records;
+  } catch (e) {
+    Logger.log('Error reading all records: ' + e);
+    return [];
+  }
+}
+
+/**
+ * Retrieves a single DailyRecord by DateKey (YYYY-MM-DD).
+ */
+function getRecord(dateKey) {
+  if (!isValidDateKey_(dateKey)) {
+    throw new Error('Invalid DateKey: ' + dateKey);
+  }
+
+  var records = getAllRecords_();
+  for (var i = 0; i < records.length; i++) {
+    if (records[i].dateKey === dateKey) {
+      return records[i];
+    }
+  }
+
+  // If no record exists for this date, return a blank template
+  return {
+    dateKey: dateKey,
+    workPlace: 'Proddatur',
+    doctors: 0,
+    chemists: 0,
+    newConversions: 0,
+    pob: 0,
+    createdAt: '',
+    updatedAt: ''
+  };
+}
+
+/**
+ * Persists a DailyRecord by DateKey using LockService.
+ * Updates existing row if present, appends if new.
+ * Returns updated record, recalculated totals, and updated monthly overview.
+ */
+function saveRecord(recordPayload) {
+  var norm = normalizeDailyRecord_(recordPayload);
+  var displayDate = formatDisplayDate_(norm.dateKey);
+  var nowIso = Utilities.formatDate(new Date(), 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+
+  return withLock_(function() {
+    var sheet = getSheet_(SHEET_NAMES.RECORDS);
+    var lastRow = sheet.getLastRow();
+
+    var targetRow = -1;
+    var existingCreatedAt = '';
+
+    if (lastRow > 1) {
+      var dateKeys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < dateKeys.length; i++) {
+        var k = dateKeys[i][0];
+        var sKey = '';
+        if (k instanceof Date) {
+          sKey = Utilities.formatDate(k, TIMEZONE_KOLKATA, 'yyyy-MM-dd');
+        } else {
+          sKey = String(k || '').trim();
+        }
+
+        if (sKey === norm.dateKey) {
+          targetRow = i + 2;
+          // Get existing createdAt
+          existingCreatedAt = String(sheet.getRange(targetRow, 8).getValue() || '');
+          break;
+        }
+      }
+    }
+
+    var createdAt = existingCreatedAt || nowIso;
+    var updatedAt = nowIso;
+
+    var rowValues = [
+      norm.dateKey,
+      displayDate,
+      norm.workPlace,
+      norm.doctors,
+      norm.chemists,
+      norm.newConversions,
+      norm.pob,
+      createdAt,
+      updatedAt
+    ];
+
+    if (targetRow > 0) {
+      // Overwrite existing row
+      sheet.getRange(targetRow, 1, 1, 9).setValues([rowValues]);
+    } else {
+      // Append new row
+      sheet.appendRow(rowValues);
+    }
+
+    norm.createdAt = createdAt;
+    norm.updatedAt = updatedAt;
+
+    // Recalculate totals and monthly overview
+    var calculated = getCalculatedReportData(norm.dateKey);
+    var monthKey = getMonthKeyFromDateKey_(norm.dateKey);
+    var monthlyOverview = getMonthlyRecords(monthKey);
+
+    return {
+      record: norm,
+      calculated: calculated,
+      monthlyOverview: monthlyOverview
+    };
+  });
+}
+/**
+ * Aggregation and cumulative calculation logic in Google Apps Script.
+ */
+
+/**
+ * Calculates all cumulative and reporting totals for a given dateKey.
+ * Authoritative backend implementation.
+ */
+function getCalculatedReportData(dateKey) {
+  if (!isValidDateKey_(dateKey)) {
+    throw new Error('Invalid DateKey: ' + dateKey);
+  }
+
+  var selectedMonthKey = getMonthKeyFromDateKey_(dateKey);
+  var weekInfo = getReportingWeek_(dateKey);
+  var targetDay = parseInt(dateKey.split('-')[2], 10);
+
+  var settings = getSettings();
+  var opening = getMonthlyOpeningBalance(selectedMonthKey);
+
+  var doctorsOpening = opening ? opening.doctorsOpening : 0;
+  var chemistsOpening = opening ? opening.chemistsOpening : 0;
+  var monthlyPobOpening = opening ? opening.pobOpening : 0;
+  var continuousPobOpening = settings.continuousPobOpeningBalance || 0;
+
+  var allRecords = getAllRecords_();
+
+  var sumDoctorsMonth = 0;
+  var sumChemistsMonth = 0;
+  var sumConversionsWeek = 0;
+  var sumConversionsMonth = 0;
+  var sumPob = 0;
+
+  for (var i = 0; i < allRecords.length; i++) {
+    var rec = allRecords[i];
+
+    // Only consider records on or before selected date
+    if (rec.dateKey > dateKey) {
+      continue;
+    }
+
+    var recMonthKey = getMonthKeyFromDateKey_(rec.dateKey);
+    var recDay = parseInt(rec.dateKey.split('-')[2], 10);
+
+    // Continuous POB accumulates all historical records on or before selected date
+    if (settings.pobMode === 'continuous') {
+      sumPob += rec.pob;
+    }
+
+    // Monthly metrics
+    if (recMonthKey === selectedMonthKey) {
+      sumDoctorsMonth += rec.doctors;
+      sumChemistsMonth += rec.chemists;
+      sumConversionsMonth += rec.newConversions;
+
+      if (settings.pobMode === 'monthly') {
+        sumPob += rec.pob;
+      }
+
+      // Weekly conversions: only records within the current reporting week range
+      if (recDay >= weekInfo.startDay && recDay <= targetDay) {
+        sumConversionsWeek += rec.newConversions;
+      }
+    }
+  }
+
+  var cumDoctors = doctorsOpening + sumDoctorsMonth;
+  var cumChemists = chemistsOpening + sumChemistsMonth;
+  var cumPob =
+    settings.pobMode === 'continuous'
+      ? continuousPobOpening + sumPob
+      : monthlyPobOpening + sumPob;
+
+  return {
+    cumDoctors: cumDoctors,
+    cumChemists: cumChemists,
+    weekNumber: weekInfo.weekNumber,
+    weekOrdinal: weekInfo.weekOrdinal,
+    weekCumConversions: sumConversionsWeek,
+    monthCumConversions: sumConversionsMonth,
+    cumPob: cumPob
+  };
+}
+
+/**
+ * Returns all records and totals for a given monthKey (YYYY-MM).
+ */
+function getMonthlyRecords(monthKey) {
+  if (!isValidMonthKey_(monthKey)) {
+    throw new Error('Invalid MonthKey: ' + monthKey);
+  }
+
+  var allRecords = getAllRecords_();
+  var filtered = [];
+
+  for (var i = 0; i < allRecords.length; i++) {
+    var rec = allRecords[i];
+    if (getMonthKeyFromDateKey_(rec.dateKey) === monthKey) {
+      filtered.push(rec);
+    }
+  }
+
+  // Sort ascending by DateKey
+  filtered.sort(function(a, b) {
+    return a.dateKey.localeCompare(b.dateKey);
+  });
+
+  var summaries = [];
+  var totalDoctors = 0;
+  var totalChemists = 0;
+
+  for (var j = 0; j < filtered.length; j++) {
+    var r = filtered[j];
+    totalDoctors += r.doctors;
+    totalChemists += r.chemists;
+
+    summaries.push({
+      dateKey: r.dateKey,
+      reportDate: formatDisplayDate_(r.dateKey),
+      workPlace: r.workPlace,
+      doctors: r.doctors,
+      chemists: r.chemists,
+      newConversions: r.newConversions,
+      pob: r.pob
+    });
+  }
+
+  return {
+    monthKey: monthKey,
+    records: summaries,
+    totalDoctors: totalDoctors,
+    totalChemists: totalChemists
+  };
+}
+/**
+ * Settings and MonthlyOpeningBalances management in Google Sheets.
+ */
+
+function getSettings() {
+  try {
+    var sheet = getSheet_(SHEET_NAMES.SETTINGS);
+    var lastRow = sheet.getLastRow();
+
+    var defaults = {
+      name: 'Aslam K. S.',
+      hq: 'Proddatur',
+      timeZone: TIMEZONE_KOLKATA,
+      pobMode: 'monthly',
+      continuousPobOpeningBalance: 0,
+      schemaVersion: '1.1.0'
+    };
+
+    if (lastRow <= 1) {
+      return defaults;
+    }
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    var map = {};
+    for (var i = 0; i < data.length; i++) {
+      var key = String(data[i][0] || '').trim();
+      var val = data[i][1];
+      if (key) {
+        map[key] = val;
+      }
+    }
+
+    return {
+      name: String(map['Name'] || defaults.name).trim(),
+      hq: String(map['HQ'] || defaults.hq).trim(),
+      timeZone: TIMEZONE_KOLKATA,
+      pobMode: map['PobMode'] === 'continuous' ? 'continuous' : 'monthly',
+      continuousPobOpeningBalance: normalizeNonNegativeInt_(map['ContinuousPobOpeningBalance']),
+      schemaVersion: String(map['SchemaVersion'] || defaults.schemaVersion)
+    };
+  } catch (e) {
+    Logger.log('Error reading settings, returning defaults: ' + e);
+    return {
+      name: 'Aslam K. S.',
+      hq: 'Proddatur',
+      timeZone: TIMEZONE_KOLKATA,
+      pobMode: 'monthly',
+      continuousPobOpeningBalance: 0,
+      schemaVersion: '1.1.0'
+    };
+  }
+}
+
+function saveSettings(settingsPayload) {
+  var normalized = normalizeAppSettings_(settingsPayload);
+
+  return withLock_(function() {
+    var sheet = getSheet_(SHEET_NAMES.SETTINGS);
+    var lastRow = sheet.getLastRow();
+
+    var existingKeys = {};
+    var rowsData = [];
+
+    if (lastRow > 1) {
+      rowsData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+      for (var i = 0; i < rowsData.length; i++) {
+        var k = String(rowsData[i][0] || '').trim();
+        if (k) existingKeys[k] = i + 2; // row index in sheet (1-based)
+      }
+    }
+
+    var targetSettings = [
+      ['Name', normalized.name],
+      ['HQ', normalized.hq],
+      ['TimeZone', TIMEZONE_KOLKATA],
+      ['PobMode', normalized.pobMode],
+      ['ContinuousPobOpeningBalance', normalized.continuousPobOpeningBalance],
+      ['SchemaVersion', normalized.schemaVersion]
+    ];
+
+    for (var j = 0; j < targetSettings.length; j++) {
+      var keyName = targetSettings[j][0];
+      var keyVal = targetSettings[j][1];
+
+      if (existingKeys[keyName]) {
+        sheet.getRange(existingKeys[keyName], 2).setValue(keyVal);
+      } else {
+        sheet.appendRow([keyName, keyVal]);
+      }
+    }
+
+    return normalized;
+  });
+}
+
+function getMonthlyOpeningBalance(monthKey) {
+  if (!isValidMonthKey_(monthKey)) {
+    return {
+      monthKey: monthKey,
+      doctorsOpening: 0,
+      chemistsOpening: 0,
+      pobOpening: 0
+    };
+  }
+
+  try {
+    var sheet = getSheet_(SHEET_NAMES.OPENING_BALANCES);
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return {
+        monthKey: monthKey,
+        doctorsOpening: 0,
+        chemistsOpening: 0,
+        pobOpening: 0
+      };
+    }
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    for (var i = 0; i < data.length; i++) {
+      var rowMonth = String(data[i][0] || '').trim();
+      if (rowMonth === monthKey) {
+        return {
+          monthKey: monthKey,
+          doctorsOpening: normalizeNonNegativeInt_(data[i][1]),
+          chemistsOpening: normalizeNonNegativeInt_(data[i][2]),
+          pobOpening: normalizeNonNegativeInt_(data[i][3]),
+          updatedAt: String(data[i][4] || '')
+        };
+      }
+    }
+  } catch (e) {
+    Logger.log('Error reading opening balance: ' + e);
+  }
+
+  return {
+    monthKey: monthKey,
+    doctorsOpening: 0,
+    chemistsOpening: 0,
+    pobOpening: 0
+  };
+}
+
+function saveMonthlyOpeningBalance(balancePayload) {
+  var normalized = normalizeMonthlyOpeningBalance_(balancePayload);
+  var nowIso = Utilities.formatDate(new Date(), 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+  normalized.updatedAt = nowIso;
+
+  return withLock_(function() {
+    var sheet = getSheet_(SHEET_NAMES.OPENING_BALANCES);
+    var lastRow = sheet.getLastRow();
+
+    var targetRow = -1;
+    if (lastRow > 1) {
+      var monthCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < monthCol.length; i++) {
+        if (String(monthCol[i][0] || '').trim() === normalized.monthKey) {
+          targetRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    var rowValues = [
+      normalized.monthKey,
+      normalized.doctorsOpening,
+      normalized.chemistsOpening,
+      normalized.pobOpening,
+      normalized.updatedAt
+    ];
+
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, 5).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+
+    return normalized;
+  });
+}
+/**
+ * Date and Time utilities for Google Apps Script.
+ * Strictly uses Asia/Kolkata timezone.
+ */
+
+var TIMEZONE_KOLKATA = 'Asia/Kolkata';
+
+/**
+ * Returns today's date in Asia/Kolkata as YYYY-MM-DD.
+ */
+function getKolkataToday_() {
+  return Utilities.formatDate(new Date(), TIMEZONE_KOLKATA, 'yyyy-MM-dd');
+}
+
+/**
+ * Formats YYYY-MM-DD into DD-MM-YYYY.
+ */
+function formatDisplayDate_(dateKey) {
+  if (!dateKey || typeof dateKey !== 'string') return '';
+  var parts = dateKey.split('-');
+  if (parts.length !== 3) return dateKey;
+  return parts[2] + '-' + parts[1] + '-' + parts[0];
+}
+
+/**
+ * Extracts month key (YYYY-MM) from dateKey (YYYY-MM-DD).
+ */
+function getMonthKeyFromDateKey_(dateKey) {
+  if (!dateKey || dateKey.length < 7) {
+    return getKolkataToday_().substring(0, 7);
+  }
+  return dateKey.substring(0, 7);
+}
+
+/**
+ * Reporting week logic:
+ * - Days 1–7: 1st week
+ * - Days 8–14: 2nd week
+ * - Days 15–21: 3rd week
+ * - Days 22–end: 4th week
+ */
+function getReportingWeek_(dateKey) {
+  var parts = dateKey.split('-');
+  var day = parts.length === 3 ? parseInt(parts[2], 10) : 1;
+
+  if (day >= 1 && day <= 7) {
+    return { weekNumber: 1, weekOrdinal: '1st', startDay: 1, endDay: 7 };
+  } else if (day >= 8 && day <= 14) {
+    return { weekNumber: 2, weekOrdinal: '2nd', startDay: 8, endDay: 14 };
+  } else if (day >= 15 && day <= 21) {
+    return { weekNumber: 3, weekOrdinal: '3rd', startDay: 15, endDay: 21 };
+  } else {
+    return { weekNumber: 4, weekOrdinal: '4th', startDay: 22, endDay: 31 };
+  }
+}
+/**
+ * Input validation and normalization for Apps Script backend.
+ */
+
+var ALLOWED_WORK_PLACES_GAS = [
+  'Proddatur',
+  'Jammalamadugu',
+  'Kamalapuram / Yerraguntla',
+  'Mydukuru /GV Satram',
+  'Porumamilla /Kalasapaadu'
+];
+
+function isValidDateKey_(dateKey) {
+  if (!dateKey || typeof dateKey !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey);
+}
+
+function isValidMonthKey_(monthKey) {
+  if (!monthKey || typeof monthKey !== 'string') return false;
+  return /^\d{4}-\d{2}$/.test(monthKey);
+}
+
+function isValidWorkPlace_(workPlace) {
+  return ALLOWED_WORK_PLACES_GAS.indexOf(workPlace) !== -1;
+}
+
+function normalizeNonNegativeInt_(val) {
+  if (typeof val === 'number') {
+    if (isNaN(val) || !isFinite(val) || val < 0) return 0;
+    return Math.floor(val);
+  }
+  if (typeof val === 'string') {
+    var cleaned = val.replace(/,/g, '').trim();
+    if (!cleaned) return 0;
+    var parsed = parseInt(cleaned, 10);
+    if (isNaN(parsed) || parsed < 0) return 0;
+    return parsed;
+  }
+  return 0;
+}
+
+function normalizeDailyRecord_(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid record payload: Expected an object');
+  }
+
+  var dateKey = String(raw.dateKey || '').trim();
+  if (!isValidDateKey_(dateKey)) {
+    throw new Error('Invalid DateKey: Must be YYYY-MM-DD');
+  }
+
+  var workPlace = raw.workPlace;
+  if (!isValidWorkPlace_(workPlace)) {
+    workPlace = 'Proddatur';
+  }
+
+  return {
+    dateKey: dateKey,
+    workPlace: workPlace,
+    doctors: normalizeNonNegativeInt_(raw.doctors),
+    chemists: normalizeNonNegativeInt_(raw.chemists),
+    newConversions: normalizeNonNegativeInt_(raw.newConversions),
+    pob: normalizeNonNegativeInt_(raw.pob),
+    createdAt: raw.createdAt || '',
+    updatedAt: raw.updatedAt || ''
+  };
+}
+
+function normalizeAppSettings_(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      name: 'Aslam K. S.',
+      hq: 'Proddatur',
+      timeZone: TIMEZONE_KOLKATA,
+      pobMode: 'continuous',
+      continuousPobOpeningBalance: 0,
+      schemaVersion: '1.0.0'
+    };
+  }
+
+  var name = String(raw.name || '').trim();
+  if (!name) name = 'Aslam K. S.';
+
+  var hq = String(raw.hq || '').trim();
+  if (!hq) hq = 'Proddatur';
+
+  var pobMode = raw.pobMode === 'continuous' ? 'continuous' : 'monthly';
+
+  return {
+    name: name,
+    hq: hq,
+    timeZone: TIMEZONE_KOLKATA,
+    pobMode: pobMode,
+    continuousPobOpeningBalance: normalizeNonNegativeInt_(raw.continuousPobOpeningBalance),
+    schemaVersion: String(raw.schemaVersion || '1.1.0')
+  };
+}
+
+function normalizeMonthlyOpeningBalance_(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid opening balance payload');
+  }
+
+  var monthKey = String(raw.monthKey || '').trim();
+  if (!isValidMonthKey_(monthKey)) {
+    throw new Error('Invalid MonthKey: Must be YYYY-MM');
+  }
+
+  return {
+    monthKey: monthKey,
+    doctorsOpening: normalizeNonNegativeInt_(raw.doctorsOpening),
+    chemistsOpening: normalizeNonNegativeInt_(raw.chemistsOpening),
+    pobOpening: normalizeNonNegativeInt_(raw.pobOpening),
+    updatedAt: raw.updatedAt || ''
+  };
+}

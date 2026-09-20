@@ -14,7 +14,6 @@ import { EveningReport } from './components/EveningReport';
 import { SaveStatus } from './components/SaveStatus';
 import { MonthlyOverview } from './components/MonthlyOverview';
 import { SettingsPanel } from './components/SettingsPanel';
-import { DeploymentGuideModal } from './components/DeploymentGuideModal';
 import { useAutosave } from './hooks/useAutosave';
 import { useDailyRecord } from './hooks/useDailyRecord';
 import { useMonthlyOverview } from './hooks/useMonthlyOverview';
@@ -24,7 +23,6 @@ import { useScrollDirection } from './hooks/useScrollDirection';
 import { useTheme } from './hooks/useTheme';
 import { ThemeToggle } from './components/ThemeToggle';
 import { fetchCalculatedReportData, fetchInitialAppData } from './services/records';
-import { isGasEnvironment } from './services/appsScript';
 import { getMonthKeyFromDateKey } from './lib/dates';
 import type {
   CalculatedReportData,
@@ -37,7 +35,6 @@ export default function App() {
   const [initialData, setInitialData] = useState<InitialAppData | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('morning');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Initial data loading
@@ -95,8 +92,6 @@ export default function App() {
       setActiveTab={setActiveTab}
       isSettingsOpen={isSettingsOpen}
       setIsSettingsOpen={setIsSettingsOpen}
-      isGuideOpen={isGuideOpen}
-      setIsGuideOpen={setIsGuideOpen}
     />
   );
 }
@@ -107,8 +102,6 @@ interface AppContentProps {
   setActiveTab: (tab: ReportTab) => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
-  isGuideOpen: boolean;
-  setIsGuideOpen: (open: boolean) => void;
 }
 
 function AppContent({
@@ -117,8 +110,6 @@ function AppContent({
   setActiveTab,
   isSettingsOpen,
   setIsSettingsOpen,
-  isGuideOpen,
-  setIsGuideOpen,
 }: AppContentProps) {
   // Monthly overview state
   const monthlyOverview = useMonthlyOverview({
@@ -192,8 +183,6 @@ function AppContent({
     // If already saved, fetch authoritative calculation for current dateKey
     return fetchCalculatedReportData(daily.record.dateKey);
   };
-
-  const isBackendGas = isGasEnvironment();
 
   // Dark mode theme hook
   const { isDark, toggleTheme } = useTheme();
@@ -360,19 +349,6 @@ function AppContent({
           )}
         </AnimatePresence>
 
-        {/* Clean minimal footer */}
-        <footer className="pt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">
-          <button
-            type="button"
-            onClick={() => {
-              setIsGuideOpen(true);
-              showBars();
-            }}
-            className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
-          >
-            Sheets Setup Guide
-          </button>
-        </footer>
       </main>
 
       {/* Bottom Pinned Navigation Tabs */}
@@ -403,18 +379,6 @@ function AppContent({
         currentMonthKey={getMonthKeyFromDateKey(daily.record.dateKey)}
         onLoadOpening={settingsManager.loadOpeningBalance}
         onSaveOpening={settingsManager.saveOpeningBalance}
-        onOpenDeploymentGuide={() => {
-          setIsSettingsOpen(false);
-          setIsGuideOpen(true);
-        }}
-        isBackendGas={isBackendGas}
-      />
-
-      {/* Deployment & Setup Guide Modal */}
-      <DeploymentGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
-        isBackendGas={isBackendGas}
       />
     </div>
   );
