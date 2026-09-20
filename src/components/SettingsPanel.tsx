@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Settings as SettingsIcon, X, Check, Loader2, BookOpen } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { OpeningBalancesPanel } from './OpeningBalancesPanel';
 import { normalizeNonNegativeInt } from '../lib/validation';
 import type { AppSettings, MonthlyOpeningBalance, PobMode } from '../types';
@@ -36,8 +37,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
-  if (!isOpen) return null;
-
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -59,32 +58,45 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs">
-      <div
-        id="settings-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-heading"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
-      >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
-          <div className="flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-slate-800 dark:text-slate-200" />
-            <h2 id="settings-heading" className="font-bold text-sm text-slate-900 dark:text-slate-100">
-              Application & Profile Settings
-            </h2>
-          </div>
-          <button
-            id="btn-close-settings"
-            type="button"
-            onClick={onClose}
-            aria-label="Close settings"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-all cursor-pointer"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs"
+        >
+          <motion.div
+            id="settings-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-heading"
+            initial={{ opacity: 0, scale: 0.94, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 10 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+              <div className="flex items-center gap-2">
+                <SettingsIcon className="w-5 h-5 text-slate-800 dark:text-slate-200" />
+                <h2 id="settings-heading" className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                  Application & Profile Settings
+                </h2>
+              </div>
+              <motion.button
+                id="btn-close-settings"
+                type="button"
+                onClick={onClose}
+                whileTap={{ scale: 0.9 }}
+                aria-label="Close settings"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </motion.button>
+            </div>
 
         {/* Scrollable Content */}
         <div className="p-4 overflow-y-auto space-y-5 text-xs">
@@ -241,7 +253,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 };

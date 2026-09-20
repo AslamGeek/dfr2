@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Settings, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { DateSelector } from './components/DateSelector';
 import { WorkPlaceSelector } from './components/WorkPlaceSelector';
 import { ReportTabs, type ReportTab } from './components/ReportTabs';
@@ -236,101 +237,128 @@ function AppContent({
               onToggle={toggleTheme}
             />
 
-            <button
+            <motion.button
               id="btn-open-settings"
               type="button"
               onClick={() => {
                 setIsSettingsOpen(true);
                 showBars();
               }}
+              whileTap={{ scale: 0.90 }}
+              whileHover={{ scale: 1.05 }}
               aria-label="Open settings"
-              className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 active:scale-95 transition-all cursor-pointer"
+              className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-colors cursor-pointer"
             >
               <Settings className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         </div>
       </header>
 
       {/* Main Single-Page Utility Container */}
       <main className="max-w-md mx-auto px-4 pt-3.5 space-y-3.5">
-        {/* Screen 1: Morning Report */}
-        {activeTab === 'morning' && (
-          <div id="screen-morning-report" className="space-y-3.5">
-            <DateSelector
-              dateKey={daily.record.dateKey}
-              onChangeDate={daily.switchDate}
-              todayDateKey={autoDate.todayDateKey}
-              onGoToToday={autoDate.jumpToToday}
-              disabled={daily.isLoadingDate}
-            />
+        <AnimatePresence mode="wait">
+          {/* Screen 1: Morning Report */}
+          {activeTab === 'morning' && (
+            <motion.div
+              key="morning"
+              id="screen-morning-report"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-3.5"
+            >
+              <DateSelector
+                dateKey={daily.record.dateKey}
+                onChangeDate={daily.switchDate}
+                todayDateKey={autoDate.todayDateKey}
+                onGoToToday={autoDate.jumpToToday}
+                disabled={daily.isLoadingDate}
+              />
 
-            <WorkPlaceSelector
-              value={daily.record.workPlace}
-              onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
-              disabled={daily.isLoadingDate}
-            />
+              <WorkPlaceSelector
+                value={daily.record.workPlace}
+                onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
+                disabled={daily.isLoadingDate}
+              />
 
-            <MorningReport
-              record={daily.record}
-              settings={settingsManager.settings}
-              onEnsureSaved={autosave.flushPending}
-            />
-          </div>
-        )}
+              <MorningReport
+                record={daily.record}
+                settings={settingsManager.settings}
+                onEnsureSaved={autosave.flushPending}
+              />
+            </motion.div>
+          )}
 
-        {/* Screen 2: Evening Report */}
-        {activeTab === 'evening' && (
-          <div id="screen-evening-report" className="space-y-3.5">
-            <DateSelector
-              dateKey={daily.record.dateKey}
-              onChangeDate={daily.switchDate}
-              todayDateKey={autoDate.todayDateKey}
-              onGoToToday={autoDate.jumpToToday}
-              disabled={daily.isLoadingDate}
-            />
+          {/* Screen 2: Evening Report */}
+          {activeTab === 'evening' && (
+            <motion.div
+              key="evening"
+              id="screen-evening-report"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-3.5"
+            >
+              <DateSelector
+                dateKey={daily.record.dateKey}
+                onChangeDate={daily.switchDate}
+                todayDateKey={autoDate.todayDateKey}
+                onGoToToday={autoDate.jumpToToday}
+                disabled={daily.isLoadingDate}
+              />
 
-            <WorkPlaceSelector
-              value={daily.record.workPlace}
-              onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
-              disabled={daily.isLoadingDate}
-            />
+              <WorkPlaceSelector
+                value={daily.record.workPlace}
+                onChange={(place: WorkPlace) => daily.setWorkPlace(place)}
+                disabled={daily.isLoadingDate}
+              />
 
-            <EveningReport
-              record={daily.record}
-              settings={settingsManager.settings}
-              calculated={daily.calculatedData}
-              onChangeDoctors={daily.setDoctors}
-              onChangeChemists={daily.setChemists}
-              onChangeNewConversions={daily.setNewConversions}
-              onChangePob={daily.setPob}
-              onEnsureSavedAndGetCalculated={handleEnsureSavedAndGetCalculated}
-              disabled={daily.isLoadingDate}
-            />
-          </div>
-        )}
+              <EveningReport
+                record={daily.record}
+                settings={settingsManager.settings}
+                calculated={daily.calculatedData}
+                onChangeDoctors={daily.setDoctors}
+                onChangeChemists={daily.setChemists}
+                onChangeNewConversions={daily.setNewConversions}
+                onChangePob={daily.setPob}
+                onEnsureSavedAndGetCalculated={handleEnsureSavedAndGetCalculated}
+                disabled={daily.isLoadingDate}
+              />
+            </motion.div>
+          )}
 
-        {/* Screen 3: Monthly Overview */}
-        {activeTab === 'monthly' && (
-          <div id="screen-monthly-overview">
-            <MonthlyOverview
-              monthKey={monthlyOverview.monthKey}
-              records={monthlyOverview.records}
-              totalDoctors={monthlyOverview.totalDoctors}
-              totalChemists={monthlyOverview.totalChemists}
-              selectedDateKey={daily.record.dateKey}
-              onSelectDate={(dateKey) => daily.switchDate(dateKey)}
-              onOpenReport={(dateKey) => {
-                daily.switchDate(dateKey);
-                setActiveTab('evening');
-                showBars();
-              }}
-              onPrevMonth={monthlyOverview.prevMonth}
-              onNextMonth={monthlyOverview.nextMonth}
-              isLoading={monthlyOverview.isLoading}
-            />
-          </div>
-        )}
+          {/* Screen 3: Monthly Overview */}
+          {activeTab === 'monthly' && (
+            <motion.div
+              key="monthly"
+              id="screen-monthly-overview"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+            >
+              <MonthlyOverview
+                monthKey={monthlyOverview.monthKey}
+                records={monthlyOverview.records}
+                totalDoctors={monthlyOverview.totalDoctors}
+                totalChemists={monthlyOverview.totalChemists}
+                selectedDateKey={daily.record.dateKey}
+                onSelectDate={(dateKey) => daily.switchDate(dateKey)}
+                onOpenReport={(dateKey) => {
+                  daily.switchDate(dateKey);
+                  setActiveTab('evening');
+                  showBars();
+                }}
+                onPrevMonth={monthlyOverview.prevMonth}
+                onNextMonth={monthlyOverview.nextMonth}
+                isLoading={monthlyOverview.isLoading}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Clean minimal footer */}
         <footer className="pt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">

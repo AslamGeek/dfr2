@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Check, Copy, FileCode } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface DeploymentGuideModalProps {
   isOpen: boolean;
@@ -13,8 +14,6 @@ export const DeploymentGuideModal: React.FC<DeploymentGuideModalProps> = ({
   isBackendGas,
 }) => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  if (!isOpen) return null;
 
   const copySnippet = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -80,88 +79,104 @@ export const DeploymentGuideModal: React.FC<DeploymentGuideModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs">
-      <div
-        id="deployment-guide-modal"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
-          <div className="flex items-center gap-2">
-            <FileCode className="w-5 h-5 text-slate-800 dark:text-slate-200" />
-            <h2 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-              Google Apps Script & Sheets Deployment Guide
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close guide"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-all cursor-pointer"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs"
+        >
+          <motion.div
+            id="deployment-guide-modal"
+            initial={{ opacity: 0, scale: 0.94, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 10 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Environment Status Banner */}
-        <div className="p-3 bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-400">Runtime Connection:</span>
-          <span
-            className={`font-semibold px-2 py-0.5 rounded-full ${
-              isBackendGas
-                ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
-                : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
-            }`}
-          >
-            {isBackendGas ? 'Active Google Apps Script' : 'Local Dev Simulator'}
-          </span>
-        </div>
-
-        {/* Steps List */}
-        <div className="p-4 overflow-y-auto space-y-4 text-xs">
-          {steps.map((s, idx) => (
-            <div key={s.num} className="space-y-1">
-              <div className="flex items-baseline gap-2">
-                <span className="w-5 h-5 shrink-0 rounded-full bg-slate-900 dark:bg-slate-700 text-white font-bold flex items-center justify-center text-[10px]">
-                  {s.num}
-                </span>
-                <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">{s.title}</span>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-slate-800 dark:text-slate-200" />
+                <h2 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                  Google Apps Script & Sheets Deployment Guide
+                </h2>
               </div>
-              <p className="pl-7 text-slate-600 dark:text-slate-400 leading-relaxed">{s.desc}</p>
-              {s.code && (
-                <div className="ml-7 relative group">
-                  <pre className="p-2.5 bg-slate-900 dark:bg-slate-950 border border-slate-800 text-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto whitespace-pre-wrap">
-                    {s.code}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={() => copySnippet(s.code, idx)}
-                    className="absolute top-1.5 right-1.5 p-1 rounded-sm bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
-                    aria-label="Copy code"
-                  >
-                    {copiedIndex === idx ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              )}
+              <motion.button
+                type="button"
+                onClick={onClose}
+                whileTap={{ scale: 0.9 }}
+                aria-label="Close guide"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </motion.button>
             </div>
-          ))}
-        </div>
 
-        {/* Footer */}
-        <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-lg font-semibold text-xs transition-colors cursor-pointer"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+            {/* Environment Status Banner */}
+            <div className="p-3 bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
+              <span className="text-slate-600 dark:text-slate-400">Runtime Connection:</span>
+              <span
+                className={`font-semibold px-2 py-0.5 rounded-full ${
+                  isBackendGas
+                    ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
+                }`}
+              >
+                {isBackendGas ? 'Active Google Apps Script' : 'Local Dev Simulator'}
+              </span>
+            </div>
+
+            {/* Steps List */}
+            <div className="p-4 overflow-y-auto space-y-4 text-xs">
+              {steps.map((s, idx) => (
+                <div key={s.num} className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="w-5 h-5 shrink-0 rounded-full bg-slate-900 dark:bg-slate-700 text-white font-bold flex items-center justify-center text-[10px]">
+                      {s.num}
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">{s.title}</span>
+                  </div>
+                  <p className="pl-7 text-slate-600 dark:text-slate-400 leading-relaxed">{s.desc}</p>
+                  {s.code && (
+                    <div className="ml-7 relative group">
+                      <pre className="p-2.5 bg-slate-900 dark:bg-slate-950 border border-slate-800 text-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto whitespace-pre-wrap">
+                        {s.code}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => copySnippet(s.code, idx)}
+                        className="absolute top-1.5 right-1.5 p-1 rounded-sm bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                        aria-label="Copy code"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex justify-end">
+              <motion.button
+                type="button"
+                onClick={onClose}
+                whileTap={{ scale: 0.95 }}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-lg font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

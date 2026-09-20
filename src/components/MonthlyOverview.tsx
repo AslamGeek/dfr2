@@ -1,5 +1,6 @@
 import React from 'react';
 import { CalendarDays, ArrowRight, FileText } from 'lucide-react';
+import { motion } from 'motion/react';
 import { MonthNavigator } from './MonthNavigator';
 import { formatNumber } from '../lib/formatting';
 import type { MonthRecordSummary } from '../types';
@@ -52,28 +53,28 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
 
         {/* 4-Metric Monthly Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3.5">
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center">
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center transition-transform hover:scale-[1.02]">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Total Doctors
             </span>
             <span className="text-base font-bold text-slate-900 dark:text-slate-100">{formatNumber(totalDoctors)}</span>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center">
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center transition-transform hover:scale-[1.02]">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Total Chemists
             </span>
             <span className="text-base font-bold text-slate-900 dark:text-slate-100">{formatNumber(totalChemists)}</span>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center">
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center transition-transform hover:scale-[1.02]">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Conversions
             </span>
             <span className="text-base font-bold text-slate-900 dark:text-slate-100">{formatNumber(totalConversions)}</span>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center">
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg p-2.5 text-center transition-transform hover:scale-[1.02]">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Monthly POB
             </span>
@@ -106,15 +107,20 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {records.map((item) => {
+            {records.map((item, index) => {
               const isSelected = item.dateKey === selectedDateKey;
               return (
-                <button
+                <motion.button
                   key={item.dateKey}
                   id={`monthly-record-${item.dateKey}`}
                   type="button"
                   onClick={() => handleDayClick(item.dateKey)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-all border cursor-pointer ${
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, delay: Math.min(index * 0.03, 0.3) }}
+                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.005 }}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors border cursor-pointer ${
                     isSelected
                       ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-xs'
                       : 'bg-slate-50/70 dark:bg-slate-850 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-slate-200/80 dark:border-slate-700/60'
@@ -156,7 +162,7 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
 
                     <ArrowRight className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`} />
                   </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>
