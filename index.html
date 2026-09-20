@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daily Field-Work Report</title>
+    <meta name="description" content="Mobile-first daily field-work report generator and tracker with Google Sheets integration and instant formatted morning and evening summaries." />
+    <meta property="og:title" content="Daily Field-Work Report" />
+    <meta property="og:description" content="Mobile-first daily field-work report generator and tracker with Google Sheets integration and instant formatted morning and evening summaries." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      try {
+        var d = localStorage.getItem('dfr_theme_mode');
+        if (d === 'dark' || (!d && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
