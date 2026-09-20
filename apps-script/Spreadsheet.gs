@@ -61,13 +61,21 @@ function getSpreadsheet_() {
 }
 
 /**
- * Gets a sheet by name.
+ * Gets a sheet by name. Automatically creates and formats headers if it doesn't exist yet.
  */
 function getSheet_(sheetName) {
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    throw new Error('Required sheet "' + sheetName + '" does not exist. Run initializeApp() first.');
+    if (sheetName === SHEET_NAMES.RECORDS) {
+      sheet = ensureSheet_(SHEET_NAMES.RECORDS, RECORDS_HEADERS);
+    } else if (sheetName === SHEET_NAMES.SETTINGS) {
+      sheet = ensureSheet_(SHEET_NAMES.SETTINGS, SETTINGS_HEADERS);
+    } else if (sheetName === SHEET_NAMES.OPENING_BALANCES) {
+      sheet = ensureSheet_(SHEET_NAMES.OPENING_BALANCES, OPENING_BALANCES_HEADERS);
+    } else {
+      sheet = ss.insertSheet(sheetName);
+    }
   }
   return sheet;
 }

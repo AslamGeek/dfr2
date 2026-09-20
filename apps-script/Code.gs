@@ -23,6 +23,13 @@ function doGet(e) {
  */
 function getInitialAppData() {
   try {
+    // Ensure all sheets and default settings exist automatically on first run
+    try {
+      initializeApp();
+    } catch (initErr) {
+      Logger.log('Auto-init check in getInitialAppData: ' + initErr);
+    }
+
     var today = getKolkataToday_();
     var settings = getSettings();
     var todayRecord = getRecord(today);
