@@ -1,20 +1,21 @@
-import { appsScript } from './appsScript';
+import { reportStorage } from './storage';
 import type { AppSettings, MonthlyOpeningBalance } from '../types';
 
 export async function fetchSettings(): Promise<AppSettings> {
-  return appsScript.call<AppSettings>('getSettings');
+  return reportStorage.getSettings();
 }
 
 export async function persistSettings(settings: AppSettings): Promise<AppSettings> {
-  return appsScript.call<AppSettings>('saveSettings', settings);
+  return reportStorage.saveSettings(settings);
 }
 
 export async function fetchMonthlyOpeningBalance(monthKey: string): Promise<MonthlyOpeningBalance> {
-  return appsScript.call<MonthlyOpeningBalance>('getMonthlyOpeningBalance', monthKey);
+  return reportStorage.getMonthlyOpeningBalance(monthKey);
 }
 
 export async function persistMonthlyOpeningBalance(
   balance: MonthlyOpeningBalance
 ): Promise<MonthlyOpeningBalance> {
-  return appsScript.call<MonthlyOpeningBalance>('saveMonthlyOpeningBalance', balance);
+  return reportStorage.saveMonthlyOpeningBalance(balance);
 }
+

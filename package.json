@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "build:gas": "node scripts/bundle-gas.js",
     "test": "vitest run",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

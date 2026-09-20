@@ -1,6 +1,6 @@
 {
   "name": "Daily Field-Work Report",
-  "description": "Mobile-first daily field-work report generator and tracker with Google Sheets integration and instant formatted morning and evening summaries.",
+  "description": "Mobile-first daily field-work report generator and tracker with instant formatted morning and evening summaries.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

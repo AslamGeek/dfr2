@@ -76,8 +76,8 @@ export interface InitialAppData {
   todayRecord: DailyRecord;
   calculatedData: CalculatedReportData;
   monthlyOverview: MonthlyOverviewData;
-  isBackendGas: boolean;
 }
+
 
 export type SaveStatusType = 'saved' | 'saving' | 'unsaved' | 'error';
 

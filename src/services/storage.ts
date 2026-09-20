@@ -15,18 +15,14 @@ import type {
   MonthRecordSummary,
 } from '../types';
 
-/**
- * Local simulation of Google Sheets storage for development/preview.
- * Mirrors the exact Google Sheets schema:
- * - Records (DateKey, ReportDate, WorkPlace, Doctors, Chemists, NewConversions, POB, CreatedAt, UpdatedAt)
- * - Settings (Key, Value)
- * - MonthlyOpeningBalances (MonthKey, DoctorsOpening, ChemistsOpening, PobOpening, UpdatedAt)
- */
-
 const STORAGE_KEYS = {
-  RECORDS: 'dfwr_sheet_records',
-  SETTINGS: 'dfwr_sheet_settings',
-  OPENING_BALANCES: 'dfwr_sheet_opening_balances',
+  RECORDS: 'dfwr_local_records',
+  SETTINGS: 'dfwr_local_settings',
+  OPENING_BALANCES: 'dfwr_local_opening_balances',
+  // Legacy keys to migrate existing data smoothly
+  LEGACY_RECORDS: 'dfwr_sheet_records',
+  LEGACY_SETTINGS: 'dfwr_sheet_settings',
+  LEGACY_OPENING_BALANCES: 'dfwr_sheet_opening_balances',
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -38,30 +34,42 @@ const DEFAULT_SETTINGS: AppSettings = {
   schemaVersion: '1.1.0',
 };
 
-class MockGoogleSheetsBackend {
+class LocalReportStorage {
   private getRecordsMap(): Record<string, DailyRecord> {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
+      let data = localStorage.getItem(STORAGE_KEYS.RECORDS);
+      if (!data) {
+        // Check legacy storage key if present
+        data = localStorage.getItem(STORAGE_KEYS.LEGACY_RECORDS);
+        if (data) {
+          localStorage.setItem(STORAGE_KEYS.RECORDS, data);
+        }
+      }
       return data ? JSON.parse(data) : this.getSeedRecords();
     } catch {
       return this.getSeedRecords();
     }
   }
 
-  private saveRecordsMap(map: Record<string, DailyRecord>) {
+  private saveRecordsMap(map: Record<string, DailyRecord>): void {
     try {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(map));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to save records to localStorage:', err);
     }
   }
 
   private getSettingsMap(): AppSettings {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      let data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      if (!data) {
+        data = localStorage.getItem(STORAGE_KEYS.LEGACY_SETTINGS);
+        if (data) {
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, data);
+        }
+      }
       if (!data) return DEFAULT_SETTINGS;
       const parsed = JSON.parse(data);
-      // Migrate to monthly POB reset if on earlier schema
       if (parsed.schemaVersion !== '1.1.0') {
         parsed.pobMode = 'monthly';
         parsed.schemaVersion = '1.1.0';
@@ -73,28 +81,34 @@ class MockGoogleSheetsBackend {
     }
   }
 
-  private saveSettingsMap(settings: AppSettings) {
+  private saveSettingsMap(settings: AppSettings): void {
     try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to save settings to localStorage:', err);
     }
   }
 
   private getOpeningBalancesMap(): Record<string, MonthlyOpeningBalance> {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.OPENING_BALANCES);
+      let data = localStorage.getItem(STORAGE_KEYS.OPENING_BALANCES);
+      if (!data) {
+        data = localStorage.getItem(STORAGE_KEYS.LEGACY_OPENING_BALANCES);
+        if (data) {
+          localStorage.setItem(STORAGE_KEYS.OPENING_BALANCES, data);
+        }
+      }
       return data ? JSON.parse(data) : {};
     } catch {
       return {};
     }
   }
 
-  private saveOpeningBalancesMap(map: Record<string, MonthlyOpeningBalance>) {
+  private saveOpeningBalancesMap(map: Record<string, MonthlyOpeningBalance>): void {
     try {
       localStorage.setItem(STORAGE_KEYS.OPENING_BALANCES, JSON.stringify(map));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to save opening balances to localStorage:', err);
     }
   }
 
@@ -115,15 +129,15 @@ class MockGoogleSheetsBackend {
     return seed;
   }
 
-  // --- Backend API implementations ---
+  // --- Public API ---
 
-  public getInitialAppData(): InitialAppData {
+  public async getInitialAppData(): Promise<InitialAppData> {
     const today = getKolkataToday();
     const settings = this.getSettingsMap();
-    const todayRecord = this.getRecord(today);
-    const calculatedData = this.getCalculatedReportData(today);
+    const todayRecord = await this.getRecord(today);
+    const calculatedData = await this.getCalculatedReportData(today);
     const currentMonthKey = getMonthKeyFromDateKey(today);
-    const monthlyOverview = this.getMonthlyRecords(currentMonthKey);
+    const monthlyOverview = await this.getMonthlyRecords(currentMonthKey);
 
     return {
       serverToday: today,
@@ -131,16 +145,14 @@ class MockGoogleSheetsBackend {
       todayRecord,
       calculatedData,
       monthlyOverview,
-      isBackendGas: false,
     };
   }
 
-  public getRecord(dateKey: string): DailyRecord {
+  public async getRecord(dateKey: string): Promise<DailyRecord> {
     const map = this.getRecordsMap();
     if (map[dateKey]) {
       return normalizeDailyRecord(map[dateKey]);
     }
-    // Return blank default record
     return {
       dateKey,
       workPlace: 'Proddatur',
@@ -151,11 +163,11 @@ class MockGoogleSheetsBackend {
     };
   }
 
-  public saveRecord(recordPayload: DailyRecord): {
+  public async saveRecord(recordPayload: DailyRecord): Promise<{
     record: DailyRecord;
     calculated: CalculatedReportData;
     monthlyOverview: MonthlyOverviewData;
-  } {
+  }> {
     const norm = normalizeDailyRecord(recordPayload);
     const map = this.getRecordsMap();
     const existing = map[norm.dateKey];
@@ -170,9 +182,9 @@ class MockGoogleSheetsBackend {
     map[norm.dateKey] = updatedRecord;
     this.saveRecordsMap(map);
 
-    const calculated = this.getCalculatedReportData(norm.dateKey);
+    const calculated = await this.getCalculatedReportData(norm.dateKey);
     const monthKey = getMonthKeyFromDateKey(norm.dateKey);
-    const monthlyOverview = this.getMonthlyRecords(monthKey);
+    const monthlyOverview = await this.getMonthlyRecords(monthKey);
 
     return {
       record: updatedRecord,
@@ -181,7 +193,7 @@ class MockGoogleSheetsBackend {
     };
   }
 
-  public getCalculatedReportData(dateKey: string): CalculatedReportData {
+  public async getCalculatedReportData(dateKey: string): Promise<CalculatedReportData> {
     const recordsMap = this.getRecordsMap();
     const allRecords = Object.values(recordsMap);
     const settings = this.getSettingsMap();
@@ -192,7 +204,7 @@ class MockGoogleSheetsBackend {
     return calculateReportTotals(allRecords, dateKey, settings, opening);
   }
 
-  public getMonthlyRecords(monthKey: string): MonthlyOverviewData {
+  public async getMonthlyRecords(monthKey: string): Promise<MonthlyOverviewData> {
     const recordsMap = this.getRecordsMap();
     const allRecords = Object.values(recordsMap);
 
@@ -228,17 +240,17 @@ class MockGoogleSheetsBackend {
     };
   }
 
-  public getSettings(): AppSettings {
+  public async getSettings(): Promise<AppSettings> {
     return this.getSettingsMap();
   }
 
-  public saveSettings(settingsPayload: Partial<AppSettings>): AppSettings {
+  public async saveSettings(settingsPayload: Partial<AppSettings>): Promise<AppSettings> {
     const norm = normalizeAppSettings(settingsPayload);
     this.saveSettingsMap(norm);
     return norm;
   }
 
-  public getMonthlyOpeningBalance(monthKey: string): MonthlyOpeningBalance {
+  public async getMonthlyOpeningBalance(monthKey: string): Promise<MonthlyOpeningBalance> {
     const map = this.getOpeningBalancesMap();
     if (map[monthKey]) {
       return normalizeMonthlyOpeningBalance(map[monthKey]);
@@ -251,9 +263,9 @@ class MockGoogleSheetsBackend {
     };
   }
 
-  public saveMonthlyOpeningBalance(
+  public async saveMonthlyOpeningBalance(
     payload: Partial<MonthlyOpeningBalance> & { monthKey: string }
-  ): MonthlyOpeningBalance {
+  ): Promise<MonthlyOpeningBalance> {
     const norm = normalizeMonthlyOpeningBalance(payload);
     norm.updatedAt = new Date().toISOString();
     const map = this.getOpeningBalancesMap();
@@ -263,4 +275,4 @@ class MockGoogleSheetsBackend {
   }
 }
 
-export const mockBackend = new MockGoogleSheetsBackend();
+export const reportStorage = new LocalReportStorage();

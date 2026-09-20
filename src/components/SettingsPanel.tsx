@@ -196,7 +196,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Saving to Google Sheets Settings...</span>
+                  <span>Saving Settings...</span>
                 </>
               ) : savedSuccess ? (
                 <>
