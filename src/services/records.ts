@@ -32,3 +32,15 @@ export async function fetchMonthlyRecords(monthKey: string): Promise<MonthlyOver
   return reportStorage.getMonthlyRecords(monthKey);
 }
 
+export function getDeviceStorageStats() {
+  return reportStorage.getStorageStats();
+}
+
+export function exportDeviceBackup() {
+  return reportStorage.exportDeviceBackup();
+}
+
+export function restoreDeviceBackup(jsonString: string) {
+  return reportStorage.restoreDeviceBackup(jsonString);
+}
+

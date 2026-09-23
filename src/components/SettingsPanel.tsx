@@ -1,8 +1,23 @@
-import React, { useState } from 'react';
-import { Settings as SettingsIcon, X, Check, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Settings as SettingsIcon,
+  X,
+  Check,
+  Loader2,
+  HardDrive,
+  Download,
+  Upload,
+  ShieldCheck,
+  AlertCircle,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OpeningBalancesPanel } from './OpeningBalancesPanel';
 import { normalizeNonNegativeInt } from '../lib/validation';
+import {
+  getDeviceStorageStats,
+  exportDeviceBackup,
+  restoreDeviceBackup,
+} from '../services/records';
 import type { AppSettings, MonthlyOpeningBalance, PobMode } from '../types';
 
 interface SettingsPanelProps {
@@ -32,6 +47,62 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   );
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const storageStats = getDeviceStorageStats();
+
+  const handleExportBackup = () => {
+    try {
+      const backupJson = exportDeviceBackup();
+      const blob = new Blob([backupJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `dfr_device_backup_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setBackupMessage({ type: 'success', text: 'Backup downloaded successfully.' });
+      setTimeout(() => setBackupMessage(null), 3000);
+    } catch {
+      setBackupMessage({ type: 'error', text: 'Failed to create backup file.' });
+      setTimeout(() => setBackupMessage(null), 3000);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const success = restoreDeviceBackup(text);
+        if (success) {
+          setBackupMessage({
+            type: 'success',
+            text: 'Backup restored! Reloading application data...',
+          });
+          setTimeout(() => {
+            window.location.reload();
+          }, 1200);
+        } else {
+          setBackupMessage({ type: 'error', text: 'Invalid backup file format.' });
+          setTimeout(() => setBackupMessage(null), 3500);
+        }
+      } catch {
+        setBackupMessage({ type: 'error', text: 'Failed to parse backup file.' });
+        setTimeout(() => setBackupMessage(null), 3500);
+      }
+    };
+    reader.readAsText(file);
+    // Reset file input value so same file can be reselected
+    e.target.value = '';
+  };
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,6 +287,89 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               onLoadOpening={onLoadOpening}
               onSaveOpening={onSaveOpening}
             />
+          </div>
+
+          {/* Device-Only Storage & Backup Section */}
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <HardDrive className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span className="font-bold text-[11px] uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Device Storage & Privacy
+                </span>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 px-2 py-0.5 rounded-md">
+                <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                Device-Only
+              </span>
+            </div>
+
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                All daily reports, calculations, and balances are stored{' '}
+                <strong>locally on this device only</strong>. There is no external Google Sheets,
+                cloud database, or remote server sync. Your data remains strictly on your device.
+              </p>
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                <span>Stored Records: <strong>{storageStats.recordCount}</strong></span>
+                <span>Location: <strong>Browser Local Storage</strong></span>
+              </div>
+            </div>
+
+            {/* Backup & Restore Controls */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/70 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                title="Download all stored records and settings as a JSON backup file"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Export Backup</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/70 text-slate-700 dark:text-slate-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                title="Restore stored records and settings from a JSON backup file"
+              >
+                <Upload className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Restore Backup</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            {/* Notification message */}
+            <AnimatePresence>
+              {backupMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className={`p-2 rounded-lg text-[11px] flex items-center gap-1.5 ${
+                    backupMessage.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                      : 'bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                  }`}
+                >
+                  {backupMessage.type === 'success' ? (
+                    <Check className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                  )}
+                  <span>{backupMessage.text}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

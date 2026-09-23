@@ -80,7 +80,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-slate-800 dark:text-slate-200 animate-spin mb-3" />
-        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Connecting to Daily Report Service…</p>
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Loading from device storage…</p>
       </div>
     );
   }
@@ -383,7 +383,7 @@ function AppContent({
         </div>
       </nav>
 
-      {/* Settings Modal Sheet */}
+      {/* Settings Modal */}
       <SettingsPanel
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}

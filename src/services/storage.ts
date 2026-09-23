@@ -19,11 +19,14 @@ const STORAGE_KEYS = {
   RECORDS: 'dfwr_local_records',
   SETTINGS: 'dfwr_local_settings',
   OPENING_BALANCES: 'dfwr_local_opening_balances',
-  // Legacy keys to migrate existing data smoothly
-  LEGACY_RECORDS: 'dfwr_sheet_records',
-  LEGACY_SETTINGS: 'dfwr_sheet_settings',
-  LEGACY_OPENING_BALANCES: 'dfwr_sheet_opening_balances',
+  // Deprecated legacy keys removed
 };
+
+const LEGACY_KEYS_TO_CLEAN = [
+  'dfwr_sheet_records',
+  'dfwr_sheet_settings',
+  'dfwr_sheet_opening_balances',
+];
 
 const DEFAULT_SETTINGS: AppSettings = {
   name: 'Aslam K. S.',
@@ -35,16 +38,34 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 class LocalReportStorage {
+  private cleanupLegacyStorage(): void {
+    try {
+      // One-time migration from any old sheet keys to purely local device keys
+      const oldRecords = localStorage.getItem('dfwr_sheet_records');
+      if (oldRecords && !localStorage.getItem(STORAGE_KEYS.RECORDS)) {
+        localStorage.setItem(STORAGE_KEYS.RECORDS, oldRecords);
+      }
+      const oldSettings = localStorage.getItem('dfwr_sheet_settings');
+      if (oldSettings && !localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, oldSettings);
+      }
+      const oldBalances = localStorage.getItem('dfwr_sheet_opening_balances');
+      if (oldBalances && !localStorage.getItem(STORAGE_KEYS.OPENING_BALANCES)) {
+        localStorage.setItem(STORAGE_KEYS.OPENING_BALANCES, oldBalances);
+      }
+
+      for (const legacyKey of LEGACY_KEYS_TO_CLEAN) {
+        localStorage.removeItem(legacyKey);
+      }
+    } catch {
+      // Ignore storage access errors in restricted contexts
+    }
+  }
+
   private getRecordsMap(): Record<string, DailyRecord> {
     try {
-      let data = localStorage.getItem(STORAGE_KEYS.RECORDS);
-      if (!data) {
-        // Check legacy storage key if present
-        data = localStorage.getItem(STORAGE_KEYS.LEGACY_RECORDS);
-        if (data) {
-          localStorage.setItem(STORAGE_KEYS.RECORDS, data);
-        }
-      }
+      this.cleanupLegacyStorage();
+      const data = localStorage.getItem(STORAGE_KEYS.RECORDS);
       return data ? JSON.parse(data) : this.getSeedRecords();
     } catch {
       return this.getSeedRecords();
@@ -55,19 +76,14 @@ class LocalReportStorage {
     try {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(map));
     } catch (err) {
-      console.warn('Failed to save records to localStorage:', err);
+      console.warn('Failed to save records to device localStorage:', err);
     }
   }
 
   private getSettingsMap(): AppSettings {
     try {
-      let data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (!data) {
-        data = localStorage.getItem(STORAGE_KEYS.LEGACY_SETTINGS);
-        if (data) {
-          localStorage.setItem(STORAGE_KEYS.SETTINGS, data);
-        }
-      }
+      this.cleanupLegacyStorage();
+      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (!data) return DEFAULT_SETTINGS;
       const parsed = JSON.parse(data);
       if (parsed.schemaVersion !== '1.1.0') {
@@ -85,19 +101,14 @@ class LocalReportStorage {
     try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     } catch (err) {
-      console.warn('Failed to save settings to localStorage:', err);
+      console.warn('Failed to save settings to device localStorage:', err);
     }
   }
 
   private getOpeningBalancesMap(): Record<string, MonthlyOpeningBalance> {
     try {
-      let data = localStorage.getItem(STORAGE_KEYS.OPENING_BALANCES);
-      if (!data) {
-        data = localStorage.getItem(STORAGE_KEYS.LEGACY_OPENING_BALANCES);
-        if (data) {
-          localStorage.setItem(STORAGE_KEYS.OPENING_BALANCES, data);
-        }
-      }
+      this.cleanupLegacyStorage();
+      const data = localStorage.getItem(STORAGE_KEYS.OPENING_BALANCES);
       return data ? JSON.parse(data) : {};
     } catch {
       return {};
@@ -108,7 +119,7 @@ class LocalReportStorage {
     try {
       localStorage.setItem(STORAGE_KEYS.OPENING_BALANCES, JSON.stringify(map));
     } catch (err) {
-      console.warn('Failed to save opening balances to localStorage:', err);
+      console.warn('Failed to save opening balances to device localStorage:', err);
     }
   }
 
@@ -272,6 +283,58 @@ class LocalReportStorage {
     map[norm.monthKey] = norm;
     this.saveOpeningBalancesMap(map);
     return norm;
+  }
+
+  /**
+   * Device-only storage stats
+   */
+  public getStorageStats(): { recordCount: number; hasOpeningBalances: boolean } {
+    const recordsMap = this.getRecordsMap();
+    const balances = this.getOpeningBalancesMap();
+    return {
+      recordCount: Object.keys(recordsMap).length,
+      hasOpeningBalances: Object.keys(balances).length > 0,
+    };
+  }
+
+  /**
+   * Export all device-specific data to a clean JSON string
+   */
+  public exportDeviceBackup(): string {
+    const data = {
+      version: '1.1.0',
+      exportedAt: new Date().toISOString(),
+      storageType: 'device-local',
+      records: this.getRecordsMap(),
+      settings: this.getSettingsMap(),
+      openingBalances: this.getOpeningBalancesMap(),
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Restore device-specific data from a JSON string
+   */
+  public restoreDeviceBackup(jsonString: string): boolean {
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.records && typeof parsed.records === 'object') {
+          this.saveRecordsMap(parsed.records);
+        }
+        if (parsed.settings && typeof parsed.settings === 'object') {
+          this.saveSettingsMap(normalizeAppSettings(parsed.settings));
+        }
+        if (parsed.openingBalances && typeof parsed.openingBalances === 'object') {
+          this.saveOpeningBalancesMap(parsed.openingBalances);
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to restore device backup:', err);
+      return false;
+    }
   }
 }
 

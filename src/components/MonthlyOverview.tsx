@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, FileText, Lock, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import {
+  CalendarDays,
+  FileText,
+  Lock,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  ArrowDownWideNarrow,
+  CalendarCheck2,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MonthNavigator } from './MonthNavigator';
 import { CopyButton } from './CopyButton';
 import { formatNumber } from '../lib/formatting';
 import { generateMorningReport, generateEveningReport } from '../lib/reports';
 import { fetchDailyRecord, fetchCalculatedReportData } from '../services/records';
+import { getDayName } from '../lib/dates';
 import type {
   AppSettings,
   CalculatedReportData,
@@ -18,9 +28,9 @@ interface MonthlyOverviewProps {
   records: MonthRecordSummary[];
   totalDoctors: number;
   totalChemists: number;
-  selectedDateKey: string;
+  selectedDateKey?: string;
   settings: AppSettings;
-  onSelectDate: (dateKey: string) => void;
+  onSelectDate?: (dateKey: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   isLoading?: boolean;
@@ -31,7 +41,9 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
   records,
   totalDoctors,
   totalChemists,
+  selectedDateKey,
   settings,
+  onSelectDate,
   onPrevMonth,
   onNextMonth,
   isLoading = false,
@@ -41,7 +53,7 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
   const totalConversions = records.reduce((acc, r) => acc + (r.newConversions || 0), 0);
   const totalPob = records.reduce((acc, r) => acc + (r.pob || 0), 0);
 
-  // Sort daily records descending: latest records (most recent) at top, oldest at bottom
+  // Sort daily records descending: latest records (most recent date) at top, oldest to the bottom
   const sortedRecords = React.useMemo(() => {
     return [...records].sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [records]);
@@ -93,21 +105,28 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
         </div>
       </div>
 
-      {/* Daily Records List (Non-editable, Latest first) */}
+      {/* Daily Records List (Sorted latest first, oldest to the bottom) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 shadow-xs">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-slate-600 dark:text-slate-400" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Daily Records
             </h2>
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 px-2 py-0.5 rounded-md"
+              title="Records ordered latest date first down to oldest date at bottom"
+            >
+              <ArrowDownWideNarrow className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+              Latest first
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
               <Lock className="w-2.5 h-2.5" />
               Non-editable
             </span>
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
+            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
               {sortedRecords.length} {sortedRecords.length === 1 ? 'day' : 'days'}
             </span>
           </div>
@@ -125,6 +144,11 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
           <div className="space-y-2.5">
             {sortedRecords.map((item, index) => {
               const isExpanded = expandedDateKey === item.dateKey;
+              const isSelected = selectedDateKey === item.dateKey;
+              const dayName = getDayName(item.dateKey, 'short');
+              const isLatest = index === 0;
+              const isOldest = index === sortedRecords.length - 1 && sortedRecords.length > 1;
+
               return (
                 <motion.div
                   key={item.dateKey}
@@ -132,20 +156,39 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.15, delay: Math.min(index * 0.02, 0.25) }}
-                  className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 transition-colors"
+                  className={`rounded-xl border transition-colors p-3 ${
+                    isSelected
+                      ? 'border-blue-400 dark:border-blue-500/70 bg-blue-50/40 dark:bg-blue-950/20 shadow-xs'
+                      : 'border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40'
+                  }`}
                 >
-                  {/* Top Bar: Date, Read-only badge, Workplace */}
+                  {/* Top Bar: Date, Day, Latest/Oldest Tag, Workplace */}
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                         {item.reportDate}
                       </span>
+                      {dayName && (
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          ({dayName})
+                        </span>
+                      )}
+                      {isLatest && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 px-1.5 py-0.2 rounded">
+                          Latest
+                        </span>
+                      )}
+                      {isOldest && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-1.5 py-0.2 rounded">
+                          Oldest
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-700/70 px-1.5 py-0.2 rounded">
                         <Lock className="w-2.5 h-2.5" />
                         Read-only
                       </span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[150px]">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
                       {item.workPlace}
                     </span>
                   </div>
@@ -170,11 +213,25 @@ export const MonthlyOverview: React.FC<MonthlyOverviewProps> = ({
                     </div>
                   </div>
 
-                  {/* Bottom Row: Read-only notice + View formatted report button */}
+                  {/* Bottom Row: Actions (Switch date + View formatted report button) */}
                   <div className="mt-2.5 flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                      Non-editable record
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {onSelectDate && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectDate(item.dateKey)}
+                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'text-blue-700 dark:text-blue-300 bg-blue-100/70 dark:bg-blue-900/40'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+                          }`}
+                          title="Switch active daily date to this date"
+                        >
+                          <CalendarCheck2 className="w-3 h-3" />
+                          <span>{isSelected ? 'Active Date' : 'Select Date'}</span>
+                        </button>
+                      )}
+                    </div>
                     <button
                       type="button"
                       id={`btn-view-report-${item.dateKey}`}

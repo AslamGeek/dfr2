@@ -20,8 +20,8 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
         <motion.div
           key="saving"
           id="save-status-indicator"
-          title="Syncing..."
-          aria-label="Syncing..."
+          title="Saving to device storage..."
+          aria-label="Saving to device storage..."
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
@@ -36,8 +36,8 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
         <motion.div
           key="unsaved"
           id="save-status-indicator"
-          title="Unsaved changes"
-          aria-label="Unsaved changes"
+          title="Unsaved changes (device)"
+          aria-label="Unsaved changes (device)"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
@@ -52,7 +52,7 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
         <motion.div
           key="error"
           id="save-status-indicator"
-          title={errorMessage || 'Sync failed'}
+          title={errorMessage || 'Failed to save to device'}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
@@ -65,7 +65,7 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
               type="button"
               onClick={onRetry}
               className="underline font-bold hover:text-rose-800 dark:hover:text-rose-200 cursor-pointer flex items-center gap-0.5 text-xs"
-              aria-label="Retry saving record"
+              aria-label="Retry saving to device"
             >
               <RefreshCw className="w-3 h-3" /> Retry
             </button>
@@ -77,8 +77,8 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
         <motion.div
           key="saved"
           id="save-status-indicator"
-          title="All changes synced"
-          aria-label="All changes synced"
+          title="Saved to this device"
+          aria-label="Saved to this device"
           initial={{ opacity: 0, scale: 0.7 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.7 }}
